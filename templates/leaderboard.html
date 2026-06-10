@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard - MedhaRank{% endblock %}
+
+{% block content %}
+<div class="leaderboard-page">
+    <div class="leaderboard-header" style="text-align: center; margin-bottom: 2rem;">
+        <h1><span class="material-symbols-outlined" style="font-size: 2.4rem; vertical-align: middle; color: #f1c40f;">emoji_events</span> Global Leaderboard</h1>
+        <p class="leaderboard-sub" style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.5rem;">See how you stack up against the best minds.</p>
+    </div>
+
+    {% if leaderboard %}
+    <div class="scores-table-wrapper" style="max-width: 800px; margin: 0 auto;">
+        <table class="scores-table leaderboard-table" style="width: 100%;">
+            <thead>
+                <tr>
+                    <th style="width: 80px; text-align: center;">Rank</th>
+                    <th>User</th>
+                    <th>Level</th>
+                    <th style="text-align: right;">Total XP</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in leaderboard %}
+                <tr class="{% if loop.index == 1 %}rank-1{% elif loop.index == 2 %}rank-2{% elif loop.index == 3 %}rank-3{% endif %}" {% if current_user and current_user['id'] == entry['user']['id'] %}style="background: rgba(108, 92, 231, 0.08);"{% endif %}>
+                    <td style="text-align: center; font-weight: 800; font-size: 1.2rem;">
+                        {% if loop.index == 1 %}
+                            <span class="material-symbols-outlined" style="color: #f1c40f; font-size: 1.8rem; font-variation-settings: 'FILL' 1; vertical-align: middle;">workspace_premium</span>
+                        {% elif loop.index == 2 %}
+                            <span class="material-symbols-outlined" style="color: #95a5a6; font-size: 1.8rem; font-variation-settings: 'FILL' 1; vertical-align: middle;">workspace_premium</span>
+                        {% elif loop.index == 3 %}
+                            <span class="material-symbols-outlined" style="color: #d35400; font-size: 1.8rem; font-variation-settings: 'FILL' 1; vertical-align: middle;">workspace_premium</span>
+                        {% else %}
+                            {{ loop.index }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            {% if entry['user']['profile_pic'] %}
+                            <img src="{{ url_for('static', filename='uploads/' + entry['user']['profile_pic']) }}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                            {% else %}
+                            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; display: grid; place-items: center; font-weight: 700;">
+                                {{ (entry['user']['display_name'] or entry['user']['email'])[0]|upper }}
+                            </div>
+                            {% endif %}
+                            <div>
+                                <div style="font-weight: 700; font-size: 1.05rem;">{{ entry['user']['display_name'] or entry['user']['email'].split('@')[0] }}</div>
+                                {% if entry['user']['college'] %}<div style="font-size: 0.8rem; color: var(--text-muted);">{{ entry['user']['college'] }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="subject-tag" style="background: rgba(142,68,173,.12); color: var(--accent);">Lvl {{ entry['level_info']['level'] }} - {{ entry['level_info']['title'] }}</span>
+                    </td>
+                    <td style="text-align: right; font-weight: 800; color: var(--primary); font-size: 1.1rem;">
+                        {{ entry['total_xp'] }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <span class="empty-icon material-symbols-outlined" style="font-size: 3rem;">social_leaderboard</span>
+        <h3>No Data Yet</h3>
+        <p>Take exams to be the first on the leaderboard!</p>
+        <a href="{{ url_for('subjects_page') }}" class="btn btn-primary" style="margin-top: 1rem;">Start Practicing</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

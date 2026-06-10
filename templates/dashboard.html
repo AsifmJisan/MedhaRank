@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - MedhaRank{% endblock %}
+
+{% block content %}
+<!-- Profile Header -->
+<div class="dash-profile-header">
+    <div class="dash-avatar-wrap">
+        {% if user and user['profile_pic'] %}
+        <img src="{{ url_for('static', filename='uploads/' + user['profile_pic']) }}" alt="Profile" class="dash-avatar">
+        {% else %}
+        <div class="dash-avatar-placeholder">{{ (user['display_name'] or user['email'])[0]|upper if user else '?' }}</div>
+        {% endif %}
+    </div>
+    <div class="dash-profile-info">
+        <h1>{{ user['display_name'] or user['email'].split('@')[0] }}</h1>
+        {% if user['college'] or user['year'] %}
+        <p class="dash-profile-meta">
+            {% if user['college'] %}<span><span class="material-symbols-outlined dash-meta-icon">school</span> {{ user['college'] }}</span>{% endif %}
+            {% if user['year'] %}<span><span class="material-symbols-outlined dash-meta-icon">calendar_month</span> Year {{ user['year'] }}</span>{% endif %}
+        </p>
+        {% endif %}
+        {% if user['bio'] %}<p class="dash-profile-bio">{{ user['bio'] }}</p>{% endif %}
+        <a href="{{ url_for('profile') }}" class="btn btn-secondary btn-sm" style="margin-top:.75rem;">Edit Profile</a>
+    </div>
+    <!-- Level Badge -->
+    <div class="level-card">
+        <div class="level-crown"><span class="material-symbols-outlined">workspace_premium</span></div>
+        <div class="level-num">Lvl {{ level_info.level }}</div>
+        <div class="level-title">{{ level_info.title }}</div>
+        <div class="level-bar-wrap">
+            <div class="level-bar" style="width: {{ level_info.progress }}%;"></div>
+        </div>
+        <div class="level-xp">
+            {% if not level_info.is_max %}
+            {{ level_info.total_xp }} / {{ level_info.xp_for_next }} XP
+            {% else %}
+            {{ level_info.total_xp }} XP — MAX
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- AI Smart Revision Banner -->
+<div class="revision-banner" style="background: linear-gradient(135deg, rgba(108, 92, 231, 0.1), rgba(162, 155, 254, 0.1)); border: 1px solid rgba(108, 92, 231, 0.2); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; color: var(--primary);">psychology</span>
+        <div>
+            <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700;">AI Smart Revision</h3>
+            <p style="margin: 0; color: var(--text-muted); font-size: 0.95rem;">Review mistakes with AI-generated questions to solidify your learning.</p>
+        </div>
+    </div>
+    <a href="{{ url_for('ai_revision_landing') }}" class="btn btn-primary" style="white-space: nowrap;">Go to Revision Hub →</a>
+</div>
+
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon"><span class="material-symbols-outlined">quiz</span></div>
+        <div class="stat-value">{{ total_exams }}</div>
+        <div class="stat-label">Exams Taken</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><span class="material-symbols-outlined">check_circle</span></div>
+        <div class="stat-value">{{ total_correct }}</div>
+        <div class="stat-label">Correct Answers</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><span class="material-symbols-outlined">analytics</span></div>
+        <div class="stat-value">{{ avg_score }}%</div>
+        <div class="stat-label">Avg. Score</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon"><span class="material-symbols-outlined">bolt</span></div>
+        <div class="stat-value">{{ level_info.total_xp }}</div>
+        <div class="stat-label">Total XP</div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="charts-row">
+    <!-- Performance Trend -->
+    <div class="chart-card">
+        <h2 class="chart-title"><span class="material-symbols-outlined">trending_up</span> Performance Trend</h2>
+        <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+        </div>
+        {% if total_exams == 0 %}
+        <div class="chart-empty">Take some exams to see your trend!</div>
+        {% endif %}
+    </div>
+    <!-- Subject Breakdown -->
+    <div class="chart-card chart-card-sm">
+        <h2 class="chart-title"><span class="material-symbols-outlined">pie_chart</span> Subject Breakdown</h2>
+        <div class="chart-container pie-container">
+            <canvas id="pieChart"></canvas>
+        </div>
+        {% if total_exams == 0 %}
+        <div class="chart-empty">No data yet.</div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="chart-card">
+  <div class="activity-section">
+    <h2 class="section-title"><span class="material-symbols-outlined">calendar_month</span> Activity</h2>
+    <div class="calendar-wrapper">
+      <div id="activity-calendar" class="activity-calendar"></div>
+    </div>
+  </div>
+</div>
+<div class="chart-card chart-card-sm">
+  <h2 class="chart-title"><span class="material-symbols-outlined">bar_chart</span> Subject Performance</h2>
+  <div class="chart-container">
+    <canvas id="subjectPerfChart"></canvas>
+  </div>
+  {% if total_exams == 0 %}
+    <div class="chart-empty">No exams yet to evaluate performance.</div>
+  {% endif %}
+</div>
+<!-- Recent Scores Table -->
+<div class="scores-section">
+    <h2 class="section-title"><span class="material-symbols-outlined">history</span> Recent Exams</h2>
+    {% if scores %}
+    <div class="scores-table-wrapper">
+        <table class="scores-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Subject</th>
+                    <th>Chapter / Exam</th>
+                    <th>Score</th>
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in scores %}
+                <tr>
+                    <td>{{ s['timestamp'].split(' ')[0] if s['timestamp'] else 'N/A' }}</td>
+                    <td><span class="subject-tag">{{ s['subject_name'] }}</span></td>
+                    <td>{{ s['chapter_title'] }}</td>
+                    <td class="font-bold">{{ s['score'] }} / {{ s['total'] }}</td>
+                    <td>
+                        {% set percent = (s['score'] / s['total'] * 100) if s['total'] > 0 else 0 %}
+                        <div class="perf-bar-wrapper">
+                            <div class="perf-bar {% if percent >= 80 %}good{% elif percent >= 50 %}okay{% else %}bad{% endif %}" style="width: {{ percent }}%;"></div>
+                        </div>
+                        <span class="perf-pct">{{ percent|round|int }}%</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <span class="empty-icon material-symbols-outlined">assignment</span>
+        <h3>No exams taken yet.</h3>
+        <p>Start practicing to see your scores here!</p>
+        <a href="{{ url_for('subjects_page') }}" class="btn btn-primary" style="margin-top: 1rem;">Explore Subjects</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const trendData = {{ trend_data | safe }};
+const subjectStats = {{ subject_stats | safe }};
+const dailyActivity = {{ daily_activity | safe }};
+
+// --- Activity Calendar ---
+const calendarEl = document.getElementById('activity-calendar');
+if (calendarEl) {
+    const today = new Date();
+    // Calculate start date (364 days ago) to get exactly 52 weeks * 7 days
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - 364);
+    
+    // Create cells
+    for (let i = 0; i <= 364; i++) {
+        const d = new Date(startDate);
+        d.setDate(d.getDate() + i);
+        
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${d.getFullYear()}-${month}-${day}`;
+        
+        const count = dailyActivity[dateStr] || 0;
+        
+        let level = 0;
+        if (count >= 4) level = 4;
+        else if (count >= 3) level = 3;
+        else if (count >= 2) level = 2;
+        else if (count >= 1) level = 1;
+
+        const cell = document.createElement('div');
+        cell.className = `activity-cell level-${level}`;
+        cell.title = `${count} exam${count !== 1 ? 's' : ''} on ${dateStr}`;
+        calendarEl.appendChild(cell);
+    }
+}
+
+// Detect theme
+const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+const gridColor = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)';
+const tickColor = isDark ? '#9ca3b0' : '#6c757d';
+const tooltipBg = isDark ? '#1a1d27' : '#fff';
+const tooltipText = isDark ? '#e4e6eb' : '#212529';
+
+// --- Trend Line Chart ---
+if (trendData.length > 0) {
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
+    const gradient = trendCtx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, 'rgba(108, 92, 231, 0.4)');
+    gradient.addColorStop(1, 'rgba(108, 92, 231, 0.0)');
+
+    new Chart(trendCtx, {
+        type: 'line',
+        data: {
+            labels: trendData.map(d => d.label),
+            datasets: [{
+                label: 'Score %',
+                data: trendData.map(d => d.percent),
+                fill: true,
+                backgroundColor: gradient,
+                borderColor: '#6c5ce7',
+                borderWidth: 3,
+                pointBackgroundColor: '#6c5ce7',
+                pointRadius: 5,
+                pointHoverRadius: 8,
+                tension: 0.4,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipText,
+                    borderColor: '#6c5ce7',
+                    borderWidth: 1,
+                    callbacks: { label: ctx => ` ${ctx.raw}%` }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0, max: 100,
+                    grid: { color: gridColor },
+                    ticks: { color: tickColor, callback: v => v + '%' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: tickColor }
+                }
+            }
+        }
+    });
+}
+
+// --- Pie Chart ---
+const subjectNames = Object.keys(subjectStats);
+if (subjectNames.length > 0) {
+    const pieCtx = document.getElementById('pieChart').getContext('2d');
+    const colors = ['#6c5ce7','#a29bfe','#fd79a8','#fdcb6e','#00cec9','#e17055','#74b9ff','#55efc4'];
+    new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+            labels: subjectNames,
+            datasets: [{
+                data: subjectNames.map(n => subjectStats[n].exams),
+                backgroundColor: colors.slice(0, subjectNames.length),
+                borderWidth: 2,
+                borderColor: isDark ? '#1a1d27' : '#fff',
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '65%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: tickColor, padding: 14, font: { size: 13 } }
+                },
+                tooltip: {
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipText,
+                    borderColor: '#6c5ce7',
+                    borderWidth: 1,
+                    callbacks: {
+                        label: ctx => ` ${ctx.label}: ${ctx.raw} exam${ctx.raw !== 1 ? 's' : ''}`
+                    }
+                }
+            }
+        }
+    });
+}
+ // --- Subject Performance Horizontal Bar Chart ---
+ const perfCtx = document.getElementById('subjectPerfChart')?.getContext('2d');
+ if (perfCtx && Object.keys(subjectStats).length > 0) {
+   const labels = Object.keys(subjectStats);
+   const data = labels.map(name => {
+     const s = subjectStats[name];
+     return s.total ? (s.correct / s.total * 100) : 0;
+   });
+   const colors = data.map(p => {
+     if (p >= 80) return '#28a745'; // green
+     if (p >= 50) return '#ffc107'; // yellow
+     return '#dc3545'; // red
+   });
+   new Chart(perfCtx, {
+     type: 'bar',
+     data: {
+       labels,
+       datasets: [{
+         label: 'Avg Score %',
+         data,
+         backgroundColor: colors,
+         borderColor: colors,
+         borderWidth: 1,
+       }]
+     },
+     options: {
+       indexAxis: 'y',
+       responsive: true,
+       maintainAspectRatio: false,
+       plugins: {
+         legend: { display: false },
+         tooltip: {
+           backgroundColor: tooltipBg,
+           titleColor: tooltipText,
+           bodyColor: tooltipText,
+           borderColor: '#6c5ce7',
+           borderWidth: 1,
+           callbacks: { label: ctx => ` ${ctx.raw.toFixed(1)}%` }
+         }
+       },
+       scales: {
+         x: { beginAtZero: true, max: 100, grid: { color: gridColor }, ticks: { color: tickColor, callback: v => v + '%' } },
+         y: { ticks: { color: tickColor } }
+       }
+     }
+   });
+ }
+</script>
+{% endblock %}

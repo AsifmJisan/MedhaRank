@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Student Exam Practice — sharpen your skills with interactive multiple-choice quizzes." />
+    <title>{% block title %}MedhaRank{% endblock %}</title>
+    <!-- Google Fonts: Inter and Material Symbols Outlined -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+    <link rel="icon" href="{{ url_for('static', filename='icon.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3" />
+    <!-- MathJax: render LaTeX in questions, options and AI explanations -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" id="MathJax-script" async></script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="header-inner">
+            {% if request.endpoint != 'home' and request.endpoint != 'subjects_page' %}
+            <a href="{{ url_for('home') }}" class="logo">
+            </a>
+            {% else %}
+            <div class="logo-placeholder"></div>
+            {% endif %}
+            <nav class="main-nav">
+                <a href="{{ url_for('subjects_page') }}" class="nav-link">All Exams</a>
+                <a href="{{ url_for('random_exam_setup') }}" class="nav-link">Random Exam</a>
+                <a href="{{ url_for('study_home') }}" class="nav-link">Study Notes</a>
+                <a href="{{ url_for('live_dashboard') }}" class="nav-link" style="color: var(--accent); font-weight: bold; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem; color: #e74c3c; vertical-align: middle;">fiber_manual_record</span>Live Exams</a>
+                <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
+                <a href="{{ url_for('hall_of_fame') }}" class="nav-link">Hall of Fame</a>
+                {% if session.get('user_id') %}
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('profile') }}" class="nav-link nav-profile">
+                    {% if current_user and current_user['profile_pic'] %}
+                    <img src="{{ url_for('static', filename='uploads/' + current_user['profile_pic']) }}" alt="Avatar" class="nav-avatar">
+                    {% else %}
+                    <span class="nav-avatar-placeholder">{{ (current_user['display_name'] or current_user['email'])[0]|upper if current_user else '?' }}</span>
+                    {% endif %}
+                </a>
+                <a href="{{ url_for('logout') }}" class="nav-link">Logout</a>
+                {% else %}
+                <a href="{{ url_for('login') }}" class="nav-link">Log In</a>
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-sm">Sign Up</a>
+                {% endif %}
+                <button id="theme-toggle" class="theme-toggle" aria-label="Toggle Theme">
+                    <span class="icon-sun material-symbols-outlined">light_mode</span>
+                    <span class="icon-moon material-symbols-outlined">dark_mode</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-col">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="MedhaRank Logo" class="footer-logo">
+                <p>Master your subjects with interactive quizzes and real-time performance tracking.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Platform</h4>
+                <a href="{{ url_for('subjects_page') }}">All Subjects</a>
+                <a href="{{ url_for('dashboard') }}">Dashboard</a>
+                <a href="{{ url_for('hall_of_fame') }}">Hall of Fame</a>
+            </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <a href="{{ url_for('privacy') }}">Privacy Policy</a>
+                <a href="{{ url_for('terms') }}">Terms of Service</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 MedhaRank &mdash; Practice makes perfect.</p>
+        </div>
+    </footer>
+
+    <!-- AI Teacher Chat Widget -->
+    <div class="chat-overlay" id="chat-overlay"></div>
+    <div class="chat-window" id="ai-chat-window">
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <div class="chat-header-icon"><span class="material-symbols-outlined">auto_awesome</span></div>
+                <div class="chat-header-text">
+                    <h3>AI Teacher</h3>
+                    <p>Online &amp; ready to help</p>
+                </div>
+            </div>
+            <button class="chat-close-btn" id="chat-close-btn"><span class="material-symbols-outlined">close</span></button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg chat-msg-ai">
+                <p>Hello! I'm your AI Teacher. How can I help you today?</p>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." autocomplete="off">
+            <button class="chat-send-btn" id="chat-send-btn"><span class="material-symbols-outlined">send</span></button>
+        </div>
+    </div>
+    <button class="chat-button" id="chat-toggle-btn">
+        <span class="material-symbols-outlined">forum</span>
+    </button>
+{% block scripts %}{% endblock %}
+    <script>
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const currentTheme = localStorage.getItem('theme');
+
+        if (currentTheme) {
+            document.documentElement.setAttribute('data-theme', currentTheme);
+        } else {
+            document.documentElement.setAttribute('data-theme', 'light');
+        }
+
+        themeToggleBtn.addEventListener('click', () => {
+            let theme = document.documentElement.getAttribute('data-theme');
+            if (theme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // --- AI Chat Widget Logic ---
+        const chatToggleBtn = document.getElementById('chat-toggle-btn');
+        const chatCloseBtn = document.getElementById('chat-close-btn');
+        const chatWindow = document.getElementById('ai-chat-window');
+        const chatInput = document.getElementById('chat-input');
+        const chatSendBtn = document.getElementById('chat-send-btn');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatOverlay = document.getElementById('chat-overlay');
+
+        let chatHistory = [];
+
+        function toggleChat() {
+            const isOpen = chatWindow.classList.toggle('open');
+            if (isOpen) {
+                chatOverlay.classList.add('active');
+                chatInput.focus();
+                document.body.style.overflow = 'hidden'; // prevent scrolling behind
+            } else {
+                chatOverlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
+        chatToggleBtn.addEventListener('click', toggleChat);
+        chatCloseBtn.addEventListener('click', toggleChat);
+        chatOverlay.addEventListener('click', toggleChat);
+
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+        chatSendBtn.addEventListener('click', sendChatMessage);
+
+        function appendMessage(sender, text, isHtml = false) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `chat-msg chat-msg-${sender}`;
+            if (isHtml) {
+                msgDiv.innerHTML = text;
+            } else {
+                const p = document.createElement('p');
+                p.textContent = text;
+                msgDiv.appendChild(p);
+            }
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return msgDiv;
+        }
+
+        async function sendChatMessage() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+
+            // Add user message
+            appendMessage('user', text);
+            chatHistory.push({ role: 'user', parts: [{ text }] });
+            chatInput.value = '';
+            chatSendBtn.disabled = true;
+
+            // Add AI typing placeholder
+            const aiMsgDiv = appendMessage('ai', '', true);
+            const cursor = document.createElement('span');
+            cursor.className = 'ai-cursor';
+            aiMsgDiv.appendChild(cursor);
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ history: chatHistory })
+                });
+                
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                const reply = data.reply;
+                chatHistory.push({ role: 'model', parts: [{ text: reply }] });
+
+                // Typewriter effect
+                aiMsgDiv.innerHTML = '';
+                const words = reply.split(' ');
+                let i = 0;
+                
+                const interval = setInterval(() => {
+                    if (i < words.length) {
+                        aiMsgDiv.innerHTML = words.slice(0, i + 1).join(' ') + '<span class="ai-cursor"></span>';
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                        i++;
+                    } else {
+                        clearInterval(interval);
+                        // Post-processing markdown
+                        let htmlContent = aiMsgDiv.innerHTML.replace('<span class="ai-cursor"></span>', '');
+                        htmlContent = htmlContent.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+                        htmlContent = htmlContent.replace(/\*(.*?)\*/g, '<i>$1</i>');
+                        
+                        // Parse paragraphs
+                        const paragraphs = htmlContent.split('\n').filter(p => p.trim());
+                        aiMsgDiv.innerHTML = paragraphs.map(p => `<p>${p}</p>`).join('');
+                        
+                        if (window.MathJax) {
+                            MathJax.typesetPromise([aiMsgDiv]);
+                        }
+                        chatSendBtn.disabled = false;
+                        chatInput.focus();
+                    }
+                }, 80);
+
+            } catch (err) {
+                aiMsgDiv.innerHTML = `<p style="color:var(--wrong);">Error: ${err.message}</p>`;
+                chatSendBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

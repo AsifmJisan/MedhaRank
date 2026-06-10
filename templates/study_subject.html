@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Study — {{ subject['name'] }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Study Theme Override */
+    :root {
+        --primary: #10b981;
+        --accent: #059669;
+        --primary-glow: rgba(16, 185, 129, 0.35);
+    }
+    
+    .study-header {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.1));
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: var(--radius);
+        padding: 3rem 2rem;
+        text-align: center;
+        margin-bottom: 2.5rem;
+    }
+    
+    .study-header h2 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    
+    .chapter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .chapter-study-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.75rem;
+        display: flex;
+        flex-direction: column;
+        transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+    
+    .chapter-study-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--primary);
+    }
+    
+    .chapter-study-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary);
+        opacity: 0;
+        transition: opacity var(--transition);
+    }
+    
+    .chapter-study-card:hover::before {
+        opacity: 1;
+    }
+    
+    .chapter-study-card h4 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text);
+    }
+    
+    .chapter-study-card p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        margin-bottom: 1.5rem;
+        flex-grow: 1;
+        line-height: 1.5;
+    }
+    
+    .read-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--primary);
+        font-weight: 600;
+        padding: 0.75rem;
+        border-radius: var(--radius-sm);
+        transition: background var(--transition), color var(--transition);
+    }
+    
+    .read-btn:hover {
+        background: var(--primary);
+        color: white;
+        text-decoration: none;
+    }
+</style>
+
+<div class="study-header">
+    <span class="material-symbols-outlined" style="font-size: 3.5rem; color: var(--primary); margin-bottom: 1rem;">import_contacts</span>
+    <h2>{{ subject['name'] }}</h2>
+    <p style="color: var(--text-muted); font-size: 1.1rem;">Explore the chapters below to access your study materials.</p>
+</div>
+
+<div class="chapter-grid">
+    {% for chapter in chapters %}
+    <div class="chapter-study-card" id="chapter-item-{{ chapter['id'] }}">
+        <h4><span class="material-symbols-outlined" style="font-size: 1.3rem; color: var(--primary);">bookmark</span> {{ chapter['title'] }}</h4>
+        <p>{{ chapter['description'] }}</p>
+        <a href="{{ url_for('study_chapter', subject_id=subject['id'], chapter_id=chapter['id']) }}" class="read-btn" id="study-chapter-{{ chapter['id'] }}">
+            <span class="material-symbols-outlined" style="font-size: 1.2rem;">auto_stories</span> Read Notes
+        </a>
+    </div>
+    {% else %}
+    <div class="empty-state" style="grid-column: 1 / -1;">
+        <span class="empty-icon material-symbols-outlined" style="font-size: 3rem;">description</span>
+        <p>No chapters found for this subject.</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

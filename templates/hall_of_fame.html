@@ -1,0 +1,222 @@
+{% extends 'base.html' %}
+{% block title %}Hall of Fame - MedhaRank{% endblock %}
+{% block content %}
+<style>
+    .hof-hero {
+        text-align: center;
+        margin-bottom: 4rem;
+        padding-top: 2rem;
+    }
+    .hof-hero h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 1rem;
+        animation: fadeInDown 0.8s ease-out;
+    }
+    .hof-hero p {
+        font-size: 1.2rem;
+        color: var(--text-muted);
+        max-width: 600px;
+        margin: 0 auto;
+        animation: fadeInUp 0.8s ease-out 0.2s both;
+    }
+    .hof-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    .hof-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 2.5rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.4s ease, border-color 0.4s ease;
+        box-shadow: var(--shadow);
+        animation: zoomIn 0.6s ease-out both;
+    }
+    .hof-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.4s ease;
+    }
+    .hof-card:hover {
+        transform: translateY(-10px);
+        box-shadow: 0 20px 40px rgba(108, 92, 231, 0.15);
+        border-color: rgba(108, 92, 231, 0.3);
+    }
+    [data-theme="dark"] .hof-card:hover {
+        box-shadow: 0 20px 40px rgba(140, 126, 250, 0.25);
+    }
+    .hof-card:hover::before {
+        transform: scaleX(1);
+    }
+    .hof-avatar {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        margin: 0 auto 1.5rem;
+        background: linear-gradient(135deg, var(--surface-alt), var(--border));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        color: var(--primary);
+        border: 4px solid var(--surface);
+        box-shadow: 0 0 0 2px var(--border);
+        transition: all 0.4s ease;
+    }
+    .hof-card:hover .hof-avatar {
+        box-shadow: 0 0 0 2px var(--primary);
+        color: var(--accent);
+        transform: scale(1.1) rotate(5deg);
+    }
+    .hof-name {
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        color: var(--text);
+    }
+    .hof-role {
+        font-size: 0.95rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--primary);
+        margin-bottom: 1rem;
+    }
+    .hof-desc {
+        font-size: 1rem;
+        color: var(--text-muted);
+        line-height: 1.6;
+    }
+    
+    .hof-lead {
+        margin-bottom: 3rem;
+    }
+    .hof-lead .hof-card {
+        padding: 4rem 3rem;
+        background: linear-gradient(145deg, var(--surface), var(--surface-alt));
+        border: 1px solid rgba(108, 92, 231, 0.2);
+    }
+    .hof-lead .hof-avatar {
+        width: 130px;
+        height: 130px;
+        font-size: 3.5rem;
+    }
+    .hof-lead .hof-name {
+        font-size: 2.2rem;
+    }
+    .hof-lead .hof-role {
+        font-size: 1.1rem;
+        color: var(--accent);
+    }
+    .hof-lead .hof-desc {
+        font-size: 1.15rem;
+        max-width: 700px;
+        margin: 0 auto;
+    }
+    
+    .hof-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 2rem;
+    }
+
+    @keyframes fadeInDown {
+        from { opacity: 0; transform: translateY(-30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes zoomIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    
+    /* Staggered animations */
+    .hof-grid .hof-card:nth-child(1) { animation-delay: 0.3s; }
+    .hof-grid .hof-card:nth-child(2) { animation-delay: 0.4s; }
+    .hof-grid .hof-card:nth-child(3) { animation-delay: 0.5s; }
+    .hof-grid .hof-card:nth-child(4) { animation-delay: 0.6s; }
+</style>
+
+<div class="hof-hero">
+    <h1>CoderBoss</h1>
+    <p>Meet the brilliant minds who architected, engineered, and launched MedhaRank.</p>
+</div>
+
+<div class="hof-container">
+    <!-- Main Developer -->
+    <div class="hof-lead">
+        <div class="hof-card">
+            <div class="hof-avatar"><span class="material-symbols-outlined" style="font-size: inherit;">code_blocks</span></div>
+            <div class="hof-name">Asif Mahmud Jisan</div>
+            <div class="hof-role">Lead Architect & Developer</div>
+            <div class="hof-desc">
+                The mastermind behind MedhaRank's core logic. Asif established the foundational architecture, 
+                engineered complex features, managed API integrations, and orchestrated the overall project workflow across the team.
+            </div>
+        </div>
+    </div>
+
+    <!-- The Team Grid -->
+    <div class="hof-grid">
+        <!-- Visionary & Project Manager -->
+        <div class="hof-card">
+            <div class="hof-avatar"><span class="material-symbols-outlined" style="font-size: inherit;">lightbulb</span></div>
+            <div class="hof-name">Hasibur Rahman</div>
+            <div class="hof-role">Project Manager & Visionary</div>
+            <div class="hof-desc">
+                Conceived the visionary idea for MedhaRank. Hasibur expertly managed the team's dynamics, 
+                spearheaded early data collection, and provided pivotal strategic guidance throughout the build process.
+            </div>
+        </div>
+
+        <!-- Data Engineer / Frontend -->
+        <div class="hof-card">
+            <div class="hof-avatar"><span class="material-symbols-outlined" style="font-size: inherit;">database</span></div>
+            <div class="hof-name">Abdullah Fahim</div>
+            <div class="hof-role">Data Engineer</div>
+            <div class="hof-desc">
+                Bridged the gap between raw data and the user interface. Abdullah meticulously processed complex datasets 
+                and contributed significantly to constructing critical frontend components.
+            </div>
+        </div>
+
+        <!-- Data Contributor -->
+        <div class="hof-card">
+            <div class="hof-avatar"><span class="material-symbols-outlined" style="font-size: inherit;">inventory_2</span></div>
+            <div class="hof-name">Md Mehedi Hasan</div>
+            <div class="hof-role">Data Specialist</div>
+            <div class="hof-desc">
+                Fueled the platform's initial knowledge base by sourcing and providing vast amounts of essential, 
+                unprocessed educational data to power our core systems.
+            </div>
+        </div>
+
+        <!-- Data Contributor -->
+        <div class="hof-card">
+            <div class="hof-avatar"><span class="material-symbols-outlined" style="font-size: inherit;">source_notes</span></div>
+            <div class="hof-name">Miftahul Jannat</div>
+            <div class="hof-role">Data Specialist</div>
+            <div class="hof-desc">
+                Played a crucial foundational role during the project's inception by assisting in early data collection 
+                and contributing valuable prototype datasets.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

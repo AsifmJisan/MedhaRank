@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}{{ subject['name'] }} — Chapters{% endblock %}
+
+{% block content %}
+<style>
+    .exam-header-banner {
+        background: linear-gradient(135deg, rgba(108, 92, 231, 0.1), rgba(142, 68, 173, 0.1));
+        border: 1px solid rgba(108, 92, 231, 0.2);
+        border-radius: var(--radius);
+        padding: 3rem 2rem;
+        text-align: center;
+        margin-bottom: 2.5rem;
+    }
+    
+    .exam-header-banner h1 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+
+    .chapter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .chapter-exam-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.75rem;
+        display: flex;
+        flex-direction: column;
+        transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+    }
+    
+    .chapter-exam-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-hover);
+        border-color: var(--primary);
+    }
+    
+    .chapter-exam-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: var(--primary);
+        opacity: 0;
+        transition: opacity var(--transition);
+    }
+    
+    .chapter-exam-card:hover::before {
+        opacity: 1;
+    }
+    
+    .chapter-exam-card h4 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--text);
+    }
+    
+    .chapter-exam-card p {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        margin-bottom: 1.5rem;
+        flex-grow: 1;
+        line-height: 1.5;
+    }
+    
+    .start-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        background: rgba(108, 92, 231, 0.1);
+        color: var(--primary);
+        font-weight: 600;
+        padding: 0.75rem;
+        border-radius: var(--radius-sm);
+        transition: background var(--transition), color var(--transition);
+    }
+    
+    .start-btn:hover {
+        background: var(--primary);
+        color: white;
+        text-decoration: none;
+    }
+</style>
+
+<div class="exam-header-banner">
+    <span class="material-symbols-outlined" style="font-size: 3.5rem; color: var(--primary); margin-bottom: 1rem;">school</span>
+    <h1>{{ subject['name'] }}</h1>
+    {% if subject['description'] %}
+    <p style="color: var(--text-muted); font-size: 1.1rem;">{{ subject['description'] }}</p>
+    {% endif %}
+</div>
+
+<!-- Random Exam Form -->
+<section class="random-exam-form" style="margin-bottom: 2.5rem; text-align: center; background: var(--surface); padding: 1.5rem; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow);">
+    <h3 style="margin-bottom: 1rem; font-size: 1.2rem;">Quick Random Exam</h3>
+    <form action="{{ url_for('subject_random_exam', subject_id=subject['id']) }}" method="get" class="exam-form" style="display: flex; gap: 1rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+        <input type="number" name="n" placeholder="Questions (e.g. 10)" min="1" style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border); min-width: 180px;" />
+        <input type="number" name="time" placeholder="Time (mins)" min="1" style="padding: 0.75rem 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border); min-width: 150px;" />
+        <button type="submit" class="btn btn-primary" id="random-exam-btn" style="display: flex; align-items: center; gap: 0.5rem;"><span class="material-symbols-outlined">shuffle</span> Start Random</button>
+    </form>
+</section>
+
+<div class="chapter-grid">
+    {% if chapters %}
+        {% for chapter in chapters %}
+        <div class="chapter-exam-card" id="chapter-card-{{ chapter['id'] }}">
+            <h4><span class="material-symbols-outlined" style="font-size: 1.3rem; color: var(--primary);">library_books</span> {{ chapter['title'] }}</h4>
+            {% if chapter['description'] %}
+            <p>{{ chapter['description'] }}</p>
+            {% else %}
+            <p>Practice questions for this chapter.</p>
+            {% endif %}
+            <a href="{{ url_for('chapter_exam', subject_id=subject['id'], chapter_id=chapter['id']) }}" class="start-btn" id="view-chapter-{{ chapter['id'] }}">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem;">play_circle</span> Start Exam
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="empty-icon material-symbols-outlined" style="font-size: 3rem;">description</span>
+            <p>No chapters found for this subject.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- No additional scripts needed for subject page -->
+{% endblock %}

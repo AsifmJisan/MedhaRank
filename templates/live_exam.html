@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}{{ exam_type | capitalize }} Live Exam — MedhaRank{% endblock %}
+
+{% block content %}
+<section class="exam-header">
+    <a href="{{ url_for('live_dashboard') }}" class="back-link" {% if not is_result %}onclick="return confirm('If you leave now, your progress will be lost and you may not be able to re-enter. Are you sure?');"{% endif %}>← Leave Exam</a>
+    <h1>{{ exam_type | capitalize }} Live Exam</h1>
+    
+    {% if not is_result %}
+    <div class="timer" id="timer" style="color: var(--accent); font-weight: bold; font-size: 1.5rem;" data-seconds="{{ time_limit_seconds }}">
+        Time Left: --:--:--
+    </div>
+    {% endif %}
+    
+    {% if is_result %}
+    <div class="score-banner {% if score == total %}perfect{% elif score >= total // 2 %}good{% else %}needs-work{% endif %}">
+        <span class="score-label">Your Score</span>
+        <span class="score-value">{{ score }} / {{ total }}</span>
+        <span class="score-percent">{{ (score / total * 100) | round(0) | int }}%</span>
+    </div>
+    {% endif %}
+</section>
+
+{% if not is_result %}
+{# ── Question Mode ────────────────────────────────────────────────── #}
+<form action="{{ url_for('submit_live_exam', exam_type=exam_type) }}" method="POST" class="exam-form" id="exam-form">
+    {% for q in questions %}
+    <div class="question-card" id="question-{{ q['id'] }}">
+        <p class="question-number">Question {{ loop.index }} of {{ questions | length }}</p>
+        <p class="question-text">{{ q['question_text'] }}</p>
+        <div class="options-list">
+            {% for letter, label in [('a', q['option_a']), ('b', q['option_b']), ('c', q['option_c']), ('d', q['option_d'])] %}
+            <label class="option" id="option-{{ q['id'] }}-{{ letter }}">
+                <input type="radio" name="question_{{ q['id'] }}" value="{{ letter }}" />
+                <span class="option-letter">{{ letter | upper }}</span>
+                <span class="option-text">{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary btn-submit" id="submit-btn" style="background: var(--accent);">Submit Answers</button>
+</form>
+
+{% else %}
+{# ── Results Mode ─────────────────────────────────────────────────── #}
+<div class="results-list">
+    {% for q in questions %}
+    {% set r = results[loop.index0] %}
+    <div class="question-card {% if r.is_correct %}correct{% else %}incorrect{% endif %}" id="result-{{ q['id'] }}">
+        <p class="question-number">
+            Question {{ loop.index }}
+            {% if r.is_correct %}
+                <span class="badge-correct" style="display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">check</span> Correct</span>
+            {% else %}
+                <span class="badge-incorrect" style="display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">close</span> Wrong</span>
+            {% endif %}
+        </p>
+        <p class="question-text">{{ q['question_text'] }}</p>
+        <div class="options-list">
+            {% for letter, label in [('a', q['option_a']), ('b', q['option_b']), ('c', q['option_c']), ('d', q['option_d'])] %}
+            <div class="option result-option
+                        {% if letter == r.correct %}option-correct{% endif %}
+                        {% if letter == r.chosen and not r.is_correct %}option-wrong{% endif %}">
+                <span class="option-letter">{{ letter | upper }}</span>
+                <span class="option-text">{{ label }}</span>
+                {% if letter == r.correct %}
+                    <span class="tag-answer">Answer</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="ai-explain-section" id="ai-section-{{ q['id'] }}" style="margin-top: 1rem;">
+            <button class="btn btn-ai btn-sm" 
+                    data-id="{{ q['id'] }}" 
+                    data-question="{{ q['question_text'] }}"
+                    data-opa="{{ q['option_a'] }}"
+                    data-opb="{{ q['option_b'] }}"
+                    data-opc="{{ q['option_c'] }}"
+                    data-opd="{{ q['option_d'] }}"
+                    data-correct="{{ r.correct }}"
+                    onclick="fetchAIExplanation(this)">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: bottom;">auto_awesome</span> Ask AI
+            </button>
+            <div class="ai-response-box" id="ai-response-{{ q['id'] }}" style="display: none; margin-top: 0.75rem; padding: 1rem; background: var(--surface-alt); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); font-size: 0.95rem; line-height: 1.5; color: var(--text);"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div class="results-actions" style="margin-top: 2rem;">
+    <a href="{{ url_for('live_leaderboard') }}" class="btn btn-primary" id="home-btn" style="background: var(--accent);">View Leaderboard</a>
+    <a href="{{ url_for('live_dashboard') }}" class="btn btn-secondary" id="home-btn">Live Dashboard</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not is_result %}
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const timerEl = document.getElementById('timer');
+        if (!timerEl) return;
+        
+        let seconds = parseInt(timerEl.getAttribute('data-seconds'), 10);
+        
+        function formatTime(totalSeconds) {
+            if (totalSeconds <= 0) return "00:00:00";
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        const interval = setInterval(() => {
+            seconds--;
+            if (seconds <= 0) {
+                clearInterval(interval);
+                timerEl.textContent = "Time's up! Submitting...";
+                document.getElementById('exam-form').submit();
+            } else {
+                timerEl.textContent = `Time Left: ${formatTime(seconds)}`;
+                if (seconds <= 60) {
+                    timerEl.style.color = 'red';
+                    timerEl.style.animation = 'pulse 1s infinite';
+                }
+            }
+        }, 1000);
+        
+        timerEl.textContent = `Time Left: ${formatTime(seconds)}`;
+    });
+</script>
+<style>
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+</style>
+{% else %}
+<script>
+    async function fetchAIExplanation(btn) {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="material-symbols-outlined" style="animation: spin 1s linear infinite;">autorenew</span> Thinking...';
+        btn.disabled = true;
+
+        const id = btn.getAttribute('data-id');
+        const qText = btn.getAttribute('data-question');
+        const opts = {
+            a: btn.getAttribute('data-opa'),
+            b: btn.getAttribute('data-opb'),
+            c: btn.getAttribute('data-opc'),
+            d: btn.getAttribute('data-opd'),
+        };
+        const correct = btn.getAttribute('data-correct');
+        const responseBox = document.getElementById(`ai-response-${id}`);
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: `Explain why option ${correct.toUpperCase()} is the correct answer to this question:\nQuestion: ${qText}\nA) ${opts.a}\nB) ${opts.b}\nC) ${opts.c}\nD) ${opts.d}\nKeep it brief, simple, and friendly.`
+                })
+            });
+            const data = await res.json();
+            
+            responseBox.innerHTML = '';
+            responseBox.style.display = 'block';
+            
+            // Typewriter effect
+            const chars = data.reply.split('');
+            let i = 0;
+            const typeInterval = setInterval(() => {
+                if (i < chars.length) {
+                    responseBox.innerHTML += chars[i];
+                    i++;
+                } else {
+                    clearInterval(typeInterval);
+                    if (window.MathJax) {
+                        MathJax.typesetPromise([responseBox]);
+                    }
+                }
+            }, 10);
+            
+            btn.innerHTML = '<span class="material-symbols-outlined">check</span> Explained';
+        } catch (e) {
+            console.error(e);
+            responseBox.innerHTML = '<span style="color:red">Failed to get AI explanation. Please try again later.</span>';
+            responseBox.style.display = 'block';
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+</script>
+<style>
+@keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
+{% endif %}
+{% endblock %}

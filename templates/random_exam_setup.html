@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Random Exam Setup — MedhaRank{% endblock %}
+
+{% block content %}
+<div class="random-setup-container space-y-6">
+    <!-- Decorative background blobs -->
+    <div class="setup-blob setup-blob-1"></div>
+    <div class="setup-blob setup-blob-2"></div>
+
+    <!-- Header -->
+    <div class="setup-header">
+        <div class="setup-header-icon btn-gradient">
+            <span class="material-symbols-outlined">shuffle</span>
+        </div>
+        <div class="setup-header-text">
+            <h1>Random Exam</h1>
+            <p class="text-muted">Build a custom mock from any subjects and chapters.</p>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="alert alert-error" style="border-radius: 14px; padding: 1rem 1.25rem;">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form action="{{ url_for('random_exam_start') }}" method="POST" id="random-exam-form">
+
+        <!-- Step 1: Subjects -->
+        <section class="setup-section">
+            <div class="section-top">
+                <h2>1. Choose subjects</h2>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-all-subjects" style="border-radius: 10px;">Select all</button>
+            </div>
+            <div class="subject-grid">
+                {% for s in subject_map %}
+                <div class="subject-card" data-subject-id="{{ s.id }}">
+                    <div class="subject-card-inner">
+                        <div class="subject-icon-wrap">
+                            <span class="material-symbols-outlined">menu_book</span>
+                        </div>
+                        <div class="subject-info">
+                            <div class="subject-name">{{ s.name }}</div>
+                            <div class="subject-meta">{{ s.chapters|length }} chapters</div>
+                        </div>
+                        <span class="material-symbols-outlined check-icon">check_circle</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- Step 2: Chapters -->
+        <section class="setup-section" id="chapters-section" style="display:none;">
+            <div class="section-top">
+                <h2>2. Choose chapters <span class="text-xs text-muted" style="font-weight:normal;">(leave empty = all chapters)</span></h2>
+            </div>
+            <div id="chapters-container" class="space-y-4">
+                {% for s in subject_map %}
+                <div class="subject-chapters-group" data-subject-id="{{ s.id }}" style="display:none;">
+                    <div class="group-header">
+                        <span class="font-bold">{{ s.name }}</span>
+                        <button type="button" class="btn btn-secondary btn-sm select-all-chapters" data-subject-id="{{ s.id }}" style="border-radius: 10px;">Select all</button>
+                    </div>
+                    <div class="chapter-grid">
+                        {% for c in s.chapters %}
+                        <div class="chapter-card" data-chapter-id="{{ c.id }}">
+                            <div class="chapter-card-inner">
+                                <span class="chapter-title">{{ c.title }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- Hidden inputs for selected chapter IDs (populated by JS) -->
+        <div id="hidden-chapter-inputs"></div>
+
+        <!-- Step 3 & 4: Count & Time -->
+        <div class="params-grid">
+            <section class="setup-section">
+                <h2>3. Number of questions</h2>
+                <div class="preset-buttons" id="count-presets">
+                    {% for n in [10, 20, 30, 50, 100] %}
+                    <button type="button" class="preset-btn count-preset {% if loop.index == 2 %}active{% endif %}" data-value="{{ n }}">{{ n }}</button>
+                    {% endfor %}
+                </div>
+                <div class="custom-input">
+                    <label>Custom</label>
+                    <input type="number" name="question_count" id="question_count" value="20" min="1" max="500">
+                </div>
+            </section>
+
+            <section class="setup-section">
+                <h2>4. Exam time (minutes)</h2>
+                <div class="preset-buttons" id="time-presets">
+                    {% for n in [10, 20, 30, 60] %}
+                    <button type="button" class="preset-btn time-preset {% if loop.index == 2 %}active{% endif %}" data-value="{{ n }}">{{ n }} min</button>
+                    {% endfor %}
+                </div>
+                <div class="custom-input">
+                    <label>Custom (minutes)</label>
+                    <input type="number" name="time_limit" id="time_limit" value="20" min="1" max="300">
+                </div>
+            </section>
+        </div>
+
+        <!-- Start -->
+        <div class="setup-footer">
+            <div class="footer-info">
+                <span>Build your exam!</span>
+            </div>
+            <button type="submit" class="setup-start-btn" id="start-exam-btn">
+                <span class="material-symbols-outlined" style="font-size: 1.15rem;">shuffle</span> Start Exam
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const subjectCards = document.querySelectorAll(".subject-card");
+    const chaptersSection = document.getElementById("chapters-section");
+    const btnAllSubjects = document.getElementById("btn-all-subjects");
+    const hiddenInputs = document.getElementById("hidden-chapter-inputs");
+
+    // Track selected states manually (no hidden checkboxes — we build inputs on submit)
+    const selectedSubjects = new Set();
+    const selectedChapters = new Set();
+
+    // ---- Subject cards ----
+    subjectCards.forEach(card => {
+        card.addEventListener("click", () => {
+            const id = card.getAttribute("data-subject-id");
+            if (selectedSubjects.has(id)) {
+                selectedSubjects.delete(id);
+                card.classList.remove("selected");
+                // Clear chapter selections for this subject
+                const group = document.querySelector(`.subject-chapters-group[data-subject-id="${id}"]`);
+                if (group) {
+                    group.querySelectorAll(".chapter-card").forEach(ch => {
+                        selectedChapters.delete(ch.getAttribute("data-chapter-id"));
+                        ch.classList.remove("selected");
+                    });
+                }
+            } else {
+                selectedSubjects.add(id);
+                card.classList.add("selected");
+            }
+            updateChaptersVisibility();
+        });
+    });
+
+    function updateChaptersVisibility() {
+        let anySelected = false;
+        subjectCards.forEach(card => {
+            const id = card.getAttribute("data-subject-id");
+            const group = document.querySelector(`.subject-chapters-group[data-subject-id="${id}"]`);
+            if (selectedSubjects.has(id)) {
+                if (group) group.style.display = "block";
+                anySelected = true;
+            } else {
+                if (group) group.style.display = "none";
+            }
+        });
+        chaptersSection.style.display = anySelected ? "block" : "none";
+    }
+
+    // ---- Select all subjects ----
+    btnAllSubjects.addEventListener("click", () => {
+        const allSelected = selectedSubjects.size === subjectCards.length;
+        if (allSelected) {
+            selectedSubjects.clear();
+            selectedChapters.clear();
+            subjectCards.forEach(c => c.classList.remove("selected"));
+            document.querySelectorAll(".chapter-card").forEach(c => c.classList.remove("selected"));
+            btnAllSubjects.textContent = "Select all";
+        } else {
+            subjectCards.forEach(card => {
+                const id = card.getAttribute("data-subject-id");
+                selectedSubjects.add(id);
+                card.classList.add("selected");
+            });
+            btnAllSubjects.textContent = "Clear all";
+        }
+        updateChaptersVisibility();
+    });
+
+    // ---- Chapter cards ----
+    document.querySelectorAll(".chapter-card").forEach(card => {
+        card.addEventListener("click", () => {
+            const id = card.getAttribute("data-chapter-id");
+            if (selectedChapters.has(id)) {
+                selectedChapters.delete(id);
+                card.classList.remove("selected");
+            } else {
+                selectedChapters.add(id);
+                card.classList.add("selected");
+            }
+        });
+    });
+
+    // ---- Select all chapters for a subject ----
+    document.querySelectorAll(".select-all-chapters").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const sid = btn.getAttribute("data-subject-id");
+            const group = document.querySelector(`.subject-chapters-group[data-subject-id="${sid}"]`);
+            const cards = group.querySelectorAll(".chapter-card");
+            const allOn = Array.from(cards).every(c => selectedChapters.has(c.getAttribute("data-chapter-id")));
+
+            cards.forEach(c => {
+                const cid = c.getAttribute("data-chapter-id");
+                if (allOn) {
+                    selectedChapters.delete(cid);
+                    c.classList.remove("selected");
+                } else {
+                    selectedChapters.add(cid);
+                    c.classList.add("selected");
+                }
+            });
+            btn.textContent = allOn ? "Select all" : "Clear";
+        });
+    });
+
+    // ---- Preset buttons ----
+    const countInput = document.getElementById("question_count");
+    document.querySelectorAll(".count-preset").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".count-preset").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            countInput.value = btn.getAttribute("data-value");
+        });
+    });
+    countInput.addEventListener("input", () => {
+        document.querySelectorAll(".count-preset").forEach(b => b.classList.remove("active"));
+    });
+
+    const timeInput = document.getElementById("time_limit");
+    document.querySelectorAll(".time-preset").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll(".time-preset").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            timeInput.value = btn.getAttribute("data-value");
+        });
+    });
+    timeInput.addEventListener("input", () => {
+        document.querySelectorAll(".time-preset").forEach(b => b.classList.remove("active"));
+    });
+
+    // ---- Form submit: build hidden inputs for chapter_ids ----
+    document.getElementById("random-exam-form").addEventListener("submit", (e) => {
+        hiddenInputs.innerHTML = "";
+
+        // For each selected subject, if no chapters explicitly chosen, select ALL chapters
+        let finalChapterIds = new Set(selectedChapters);
+
+        selectedSubjects.forEach(sid => {
+            const group = document.querySelector(`.subject-chapters-group[data-subject-id="${sid}"]`);
+            if (!group) return;
+            const chapterCards = group.querySelectorAll(".chapter-card");
+            const hasExplicit = Array.from(chapterCards).some(c => selectedChapters.has(c.getAttribute("data-chapter-id")));
+            if (!hasExplicit) {
+                // Auto-include all chapters for this subject
+                chapterCards.forEach(c => finalChapterIds.add(c.getAttribute("data-chapter-id")));
+            }
+        });
+
+        if (selectedSubjects.size === 0) {
+            e.preventDefault();
+            alert("Please select at least one subject.");
+            return;
+        }
+
+        if (finalChapterIds.size === 0) {
+            e.preventDefault();
+            alert("No chapters available for the selected subjects.");
+            return;
+        }
+
+        // Inject hidden inputs
+        finalChapterIds.forEach(cid => {
+            const inp = document.createElement("input");
+            inp.type = "hidden";
+            inp.name = "chapter_ids";
+            inp.value = cid;
+            hiddenInputs.appendChild(inp);
+        });
+    });
+});
+</script>
+{% endblock %}

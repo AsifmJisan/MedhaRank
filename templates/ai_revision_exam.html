@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block title %}AI Smart Revision — MedhaRank{% endblock %}
+
+{% block content %}
+<section class="exam-header">
+    <a href="{{ url_for('ai_revision_landing') }}" class="back-link">← Back to Revision Hub</a>
+    <h1><span class="material-symbols-outlined" style="vertical-align: text-bottom; color: var(--primary);">psychology</span> {{ chapter['title'] }}</h1>
+    
+    <div class="score-banner" id="final-score-banner" style="display: none;">
+        <span class="score-label">Session Complete</span>
+        <span class="score-value" id="final-score-text">0 / {{ max_questions }}</span>
+        <span class="score-percent" id="final-score-percent">0%</span>
+    </div>
+</section>
+
+<div id="feed-container">
+    <!-- Questions will be appended here -->
+</div>
+
+<div class="results-actions" id="end-actions" style="display: none;">
+    <a href="{{ url_for('ai_revision_landing') }}" class="btn btn-primary">Finish Revision</a>
+</div>
+
+<style>
+.timer-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--surface-alt);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+.timer-bar {
+    height: 100%;
+    background: var(--primary);
+    width: 100%;
+    transition: width 1s linear, background-color 0.5s;
+}
+.timer-bar.warning {
+    background: #f39c12;
+}
+.timer-bar.danger {
+    background: #e74c3c;
+}
+
+.generating-container {
+    padding: 2rem;
+    text-align: center;
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+    color: var(--text-muted);
+}
+.generating-container span {
+    animation: pulse 1.5s infinite;
+    color: var(--primary);
+}
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let totalQuestions = {{ max_questions }};
+let currentCount = 0;
+let score = 0;
+let excludeIds = [];
+
+const feedContainer = document.getElementById('feed-container');
+
+function renderGenerating() {
+    const el = document.createElement('div');
+    el.className = 'generating-container';
+    el.id = 'generating-block';
+    el.innerHTML = `
+        <span class="material-symbols-outlined" style="font-size: 3rem;">auto_awesome</span>
+        <h3 style="margin-top: 1rem; color: var(--text);">Generating Next Question...</h3>
+        <p>AI is analyzing your mistakes and crafting a unique challenge.</p>
+    `;
+    feedContainer.appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function removeGenerating() {
+    const el = document.getElementById('generating-block');
+    if (el) el.remove();
+}
+
+function finishSession() {
+    removeGenerating();
+    document.getElementById('end-actions').style.display = 'flex';
+    document.getElementById('final-score-banner').style.display = 'flex';
+    document.getElementById('final-score-text').textContent = `${score} / ${currentCount}`;
+    let pct = currentCount > 0 ? Math.round((score / currentCount) * 100) : 0;
+    document.getElementById('final-score-percent').textContent = `${pct}%`;
+    
+    const banner = document.getElementById('final-score-banner');
+    if (pct === 100) banner.className = 'score-banner perfect';
+    else if (pct >= 50) banner.className = 'score-banner good';
+    else banner.className = 'score-banner needs-work';
+}
+
+function generateNext() {
+    if (currentCount >= totalQuestions) {
+        finishSession();
+        return;
+    }
+    
+    renderGenerating();
+    
+    fetch('{{ url_for("ai_revision_next") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exclude_ids: excludeIds })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'empty') {
+            finishSession();
+            return;
+        }
+        if (data.error) {
+            alert('Error: ' + data.error);
+            removeGenerating();
+            return;
+        }
+        
+        removeGenerating();
+        currentCount++;
+        renderQuestion(data.question);
+    })
+    .catch(err => {
+        console.error(err);
+        removeGenerating();
+        alert('Failed to generate next question.');
+    });
+}
+
+function renderQuestion(q) {
+    excludeIds.push(q.original_id); // don't ask again this session
+    
+    const qDiv = document.createElement('div');
+    qDiv.className = 'question-card';
+    qDiv.id = `qcard-${q.original_id}`;
+    
+    qDiv.innerHTML = `
+        <p class="question-number">Question ${currentCount} of ${totalQuestions}</p>
+        <div class="timer-bar-container" id="timer-wrap-${q.original_id}">
+            <div class="timer-bar" id="timer-${q.original_id}"></div>
+        </div>
+        <p class="question-text">${q.question_text}</p>
+        <div class="options-list" id="opts-${q.original_id}">
+            ${['a','b','c','d'].map(letter => `
+                <label class="option" id="lbl-${q.original_id}-${letter}">
+                    <input type="radio" name="q_${q.original_id}" value="${letter}" />
+                    <span class="option-letter">${letter.toUpperCase()}</span>
+                    <span class="option-text">${q['option_' + letter]}</span>
+                </label>
+            `).join('')}
+        </div>
+        <div id="expl-${q.original_id}" class="explanation-box" style="display: none; margin-top:1rem; align-items: flex-start; gap: 0.5rem;">
+            <span class="explanation-icon material-symbols-outlined" style="color: var(--primary); font-size: 1.25rem; margin-top: 0.25rem;">lightbulb</span>
+            <p style="margin: 0;"><strong>Explanation:</strong> ${q.explanation || 'No explanation provided.'}</p>
+        </div>
+    `;
+    feedContainer.appendChild(qDiv);
+    qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Typeset math if present
+    if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise([qDiv]);
+    }
+    
+    // Start timer
+    let secondsLeft = 10;
+    const timerBar = document.getElementById(`timer-${q.original_id}`);
+    
+    let answered = false;
+    
+    const interval = setInterval(() => {
+        if (answered) {
+            clearInterval(interval);
+            return;
+        }
+        secondsLeft--;
+        timerBar.style.width = `${(secondsLeft / 10) * 100}%`;
+        if (secondsLeft <= 5) timerBar.className = 'timer-bar warning';
+        if (secondsLeft <= 2) timerBar.className = 'timer-bar danger';
+        
+        if (secondsLeft <= 0) {
+            clearInterval(interval);
+            if (!answered) {
+                handleAnswer(q, null); // timed out
+            }
+        }
+    }, 1000);
+    
+    // Listen for selection
+    const radios = qDiv.querySelectorAll(`input[name="q_${q.original_id}"]`);
+    radios.forEach(r => {
+        r.addEventListener('change', () => {
+            if (!answered) {
+                answered = true;
+                handleAnswer(q, r.value);
+            }
+        });
+    });
+    
+    function handleAnswer(qObj, chosenValue) {
+        answered = true;
+        clearInterval(interval);
+        
+        // Disable all radios
+        radios.forEach(r => r.disabled = true);
+        
+        const isCorrect = chosenValue === qObj.correct_option;
+        if (isCorrect) score++;
+        
+        // Style options
+        ['a','b','c','d'].map(letter => {
+            const lbl = document.getElementById(`lbl-${qObj.original_id}-${letter}`);
+            lbl.classList.add('result-option');
+            
+            if (letter === qObj.correct_option) {
+                lbl.classList.add('option-correct');
+                lbl.innerHTML += ` <span class="tag-answer" style="float:right; margin-left: auto;">Answer</span>`;
+            }
+            if (letter === chosenValue && !isCorrect) {
+                lbl.classList.add('option-wrong');
+            }
+        });
+        
+        // Show explanation
+        document.getElementById(`expl-${qObj.original_id}`).style.display = 'flex';
+        
+        // Update header logic
+        const qNumEl = qDiv.querySelector('.question-number');
+        if (isCorrect) {
+            qDiv.classList.add('correct');
+            qNumEl.innerHTML += ` <span class="badge-correct" style="float:right; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">check</span> Correct (Removed from queue!)</span>`;
+            
+            // Tell server to remove it
+            fetch('{{ url_for("ai_revision_mark_correct") }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ original_id: qObj.original_id })
+            });
+        } else {
+            qDiv.classList.add('incorrect');
+            if (chosenValue === null) {
+                qNumEl.innerHTML += ` <span class="badge-incorrect" style="float:right; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">timer</span> Time's Up</span>`;
+            } else {
+                qNumEl.innerHTML += ` <span class="badge-incorrect" style="float:right; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">close</span> Wrong</span>`;
+            }
+        }
+        
+        // Hide timer
+        document.getElementById(`timer-wrap-${qObj.original_id}`).style.display = 'none';
+        
+        // Wait 2.5 seconds so they can read explanation, then generate next
+        setTimeout(generateNext, 2500);
+    }
+}
+
+// Start sequence
+window.addEventListener('DOMContentLoaded', () => {
+    if (totalQuestions > 0) {
+        generateNext();
+    }
+});
+</script>
+{% endblock %}

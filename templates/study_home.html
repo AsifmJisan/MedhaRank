@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Study — Subjects{% endblock %}
+
+{% block content %}
+<style>
+    /* Study Theme Override */
+    :root {
+        --primary: #10b981;
+        --accent: #059669;
+        --primary-glow: rgba(16, 185, 129, 0.35);
+    }
+    .hero-sub { color: var(--primary) !important; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+</style>
+
+<section class="hero" style="margin-bottom: 3rem;">
+    <span class="material-symbols-outlined" style="font-size: 4rem; color: var(--primary); margin-bottom: 0.5rem;">auto_stories</span>
+    <p class="hero-sub">Study Mode</p>
+    <h1>Select a Subject to Study</h1>
+    <p style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.5rem;">Dive into comprehensive notes and materials for your exams.</p>
+</section>
+
+<section class="exam-grid">
+    {% if subjects %}
+        {% for subject in subjects %}
+        <div class="exam-card study-card" id="subject-card-{{ subject['id'] }}" style="display: flex; flex-direction: column; text-align: center; align-items: center; padding: 2.5rem 1.5rem;">
+            <div class="card-badge" style="left: auto; right: 18px;"><span class="material-symbols-outlined" style="font-size: 1rem;">menu_book</span></div>
+            <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--primary); margin-bottom: 1rem; opacity: 0.8;">folder_open</span>
+            <h2 class="card-title">{{ subject['name'] }}</h2>
+            <p class="card-desc" style="margin-top: 0.5rem; margin-bottom: 1.5rem;">Access all comprehensive notes and materials for {{ subject['name'] }}.</p>
+            <a href="{{ url_for('study_subject', subject_id=subject['id']) }}" class="btn btn-primary" style="margin-top: auto; width: 100%;">
+                Open Library →
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="empty-icon material-symbols-outlined" style="font-size: 3rem;">library_books</span>
+            <p>No subjects available yet.</p>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}

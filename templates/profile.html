@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Edit Profile - MedhaRank{% endblock %}
+
+{% block content %}
+<div class="profile-page">
+
+    <div class="profile-hero">
+        <div class="profile-avatar-wrap">
+            {% if user and user['profile_pic'] %}
+            <img src="{{ url_for('static', filename='uploads/' + user['profile_pic']) }}" alt="Profile Picture" class="profile-avatar-img" id="avatar-preview">
+            {% else %}
+            <div class="profile-avatar-placeholder" id="avatar-preview-placeholder">
+                {{ (user['display_name'] or user['email'])[0]|upper if user else '?' }}
+            </div>
+            {% endif %}
+            <label for="pic-upload" class="avatar-upload-btn" title="Change Photo">
+                <span class="material-symbols-outlined" style="font-size: 1rem;">photo_camera</span>
+            </label>
+        </div>
+        <div class="profile-hero-info">
+            <h1>{{ user['display_name'] or user['email'].split('@')[0] }}</h1>
+            <p class="profile-email">{{ user['email'] }}</p>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+    {% if messages %}
+    <div class="auth-alerts">
+        {% for msg in messages %}
+        <div class="alert alert-success">{{ msg }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Profile Picture Upload Form -->
+    <form method="post" action="{{ url_for('upload_profile_pic') }}" enctype="multipart/form-data" id="pic-form">
+        <input type="file" name="profile_pic" id="pic-upload" accept="image/*" style="display:none;" onchange="document.getElementById('pic-form').submit()">
+    </form>
+
+    <!-- Profile Info Form -->
+    <div class="profile-card">
+        <h2 class="profile-section-title">Personal Information</h2>
+        <form method="post" action="{{ url_for('profile') }}" class="profile-form">
+            <div class="profile-form-grid">
+                <div class="form-group">
+                    <label for="display_name">Display Name</label>
+                    <input type="text" id="display_name" name="display_name" placeholder="Your name" value="{{ user['display_name'] or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="college">College / Institution</label>
+                    <input type="text" id="college" name="college" placeholder="Your college or university" value="{{ user['college'] or '' }}">
+                </div>
+                <div class="form-group">
+                    <label for="year">Year of Study</label>
+                    <select id="year" name="year">
+                        <option value="">Select year</option>
+                        {% for y in ['HSC 1st year', 'HSC 2nd year', 'Admission'] %}
+                        <option value="{{ y }}" {% if user['year'] == y %}selected{% endif %}>{{ y }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="goal">Your Goal</label>
+                    <select id="goal" name="goal">
+                        <option value="">Select goal</option>
+                        {% for g in ['Medical', 'Engineering', 'University'] %}
+                        <option value="{{ g }}" {% if user['goal'] == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group form-group-full">
+                    <label for="bio">Bio</label>
+                    <textarea id="bio" name="bio" rows="3" placeholder="Tell us a little about yourself…">{{ user['bio'] or '' }}</textarea>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary profile-save-btn"><span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 4px; font-size: 1.2rem;">save</span> Save Changes</button>
+        </form>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="profile-card danger-zone">
+        <h2 class="profile-section-title danger-title"><span class="material-symbols-outlined" style="vertical-align: bottom;">warning</span> Danger Zone</h2>
+        <p class="danger-desc">Deleting your account is permanent and cannot be undone. All your scores and data will be lost forever.</p>
+        <button class="btn btn-danger" onclick="document.getElementById('delete-modal').style.display='flex'">
+            <span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 4px; font-size: 1.2rem;">delete</span> Delete Account
+        </button>
+    </div>
+
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="delete-modal" style="display:none;">
+    <div class="modal-box">
+        <div class="modal-icon"><span class="material-symbols-outlined" style="font-size: inherit;">warning</span></div>
+        <h2>Delete Account?</h2>
+        <p>This will permanently delete your account, all scores, and your profile picture. <strong>This cannot be undone.</strong></p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="document.getElementById('delete-modal').style.display='none'">Cancel</button>
+            <form method="post" action="{{ url_for('delete_account') }}" style="display:inline;">
+                <button type="submit" class="btn btn-danger">Yes, Delete Forever</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}{{ chapter['title'] }} — MedhaRank{% endblock %}
+
+{% block content %}
+<section class="exam-header">
+    <a href="{{ url_for('subject_view', subject_id=chapter['subject_id']) }}" class="back-link">← Back to Chapters</a>
+    <h1>{{ chapter['title'] }}</h1>
+    {% if time_limit %}
+        <div class="timer" id="timer">Time Left: {{ time_limit }}:00</div>
+    {% endif %}
+    {% if results is not none %}
+    <div class="score-banner {% if score == total %}perfect{% elif score >= total // 2 %}good{% else %}needs-work{% endif %}">
+        <span class="score-label">Your Score</span>
+        <span class="score-value">{{ score }} / {{ total }}</span>
+        <span class="score-percent">{{ (score / total * 100) | round(0) | int }}%</span>
+    </div>
+    {% endif %}
+</section>
+
+{% if results is none %}
+{# ── Question Mode ────────────────────────────────────────────────── #}
+<form action="{{ url_for('submit_exam', subject_id=chapter['subject_id'], chapter_id=chapter['id']) }}" method="POST" class="exam-form" id="exam-form">
+    <input type="hidden" name="question_ids" value="{{ questions | map(attribute='id') | join(',') }}" />
+    {% for q in questions %}
+    <div class="question-card" id="question-{{ q['id'] }}">
+        <p class="question-number">Question {{ loop.index }} of {{ questions | length }}</p>
+        <p class="question-text">{{ q['question_text'] }}</p>
+        <div class="options-list">
+            {% for letter, label in [('a', q['option_a']), ('b', q['option_b']), ('c', q['option_c']), ('d', q['option_d'])] %}
+            <label class="option" id="option-{{ q['id'] }}-{{ letter }}">
+                <input type="radio" name="question_{{ q['id'] }}" value="{{ letter }}" />
+                <span class="option-letter">{{ letter | upper }}</span>
+                <span class="option-text">{{ label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary btn-submit" id="submit-btn">Submit Answers</button>
+</form>
+{% else %}
+{# ── Results Mode ─────────────────────────────────────────────────── #}
+<div class="results-list">
+    {% for q in questions %}
+    {% set r = results[loop.index0] %}
+    <div class="question-card {% if r.is_correct %}correct{% else %}incorrect{% endif %}" id="result-{{ q['id'] }}">
+        <p class="question-number">
+            Question {{ loop.index }}
+            {% if r.is_correct %}
+                <span class="badge-correct" style="display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">check</span> Correct</span>
+            {% else %}
+                <span class="badge-incorrect" style="display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">close</span> Wrong</span>
+            {% endif %}
+        </p>
+        <p class="question-text">{{ q['question_text'] }}</p>
+        <div class="options-list">
+            {% for letter, label in [('a', q['option_a']), ('b', q['option_b']), ('c', q['option_c']), ('d', q['option_d'])] %}
+            <div class="option result-option
+                        {% if letter == r.correct %}option-correct{% endif %}
+                        {% if letter == r.chosen and not r.is_correct %}option-wrong{% endif %}">
+                <span class="option-letter">{{ letter | upper }}</span>
+                <span class="option-text">{{ label }}</span>
+                {% if letter == r.correct %}
+                    <span class="tag-answer">Answer</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% if q['explanation'] %}
+        <div class="explanation-box" style="align-items: flex-start; gap: 0.5rem;">
+            <span class="explanation-icon material-symbols-outlined" style="color: var(--primary); font-size: 1.25rem; margin-top: 0.25rem;">lightbulb</span>
+            <p style="margin: 0;"><strong>Explanation:</strong> {{ q['explanation'] }}</p>
+        </div>
+        {% endif %}
+
+        <div class="ai-explain-section" id="ai-section-{{ q['id'] }}" style="margin-top: 1rem;">
+            <button class="btn btn-ai btn-sm" 
+                    data-id="{{ q['id'] }}" 
+                    data-question="{{ q['question_text'] }}"
+                    data-opa="{{ q['option_a'] }}"
+                    data-opb="{{ q['option_b'] }}"
+                    data-opc="{{ q['option_c'] }}"
+                    data-opd="{{ q['option_d'] }}"
+                    data-correct="{{ r.correct }}"
+                    onclick="fetchAIExplanation(this)">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: bottom;">auto_awesome</span> Ask AI
+            </button>
+            <div class="ai-response-box" id="ai-response-{{ q['id'] }}" style="display: none; margin-top: 0.75rem; padding: 1rem; background: var(--surface-alt); border-left: 4px solid var(--primary); border-radius: var(--radius-sm); font-size: 0.95rem; line-height: 1.5; color: var(--text);"></div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<div class="results-actions">
+    <a href="{{ url_for('chapter_exam', subject_id=chapter['subject_id'], chapter_id=chapter['id']) }}" class="btn btn-primary" id="retake-btn">Retake Exam</a>
+    <a href="{{ url_for('home') }}" class="btn btn-secondary" id="home-btn">All Subjects</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if time_limit %}
+<script>
+    (function(){
+        const timerEl = document.getElementById('timer');
+        let totalSeconds = parseInt('{{ time_limit }}') * 60;
+        const interval = setInterval(()=>{
+            totalSeconds--;
+            const mins = Math.floor(totalSeconds/60);
+            const secs = totalSeconds % 60;
+            timerEl.textContent = `Time Left: ${mins}:${secs.toString().padStart(2,'0')}`;
+            if(totalSeconds <= 0){
+                clearInterval(interval);
+                // Auto-submit the exam form
+                document.getElementById('exam-form').submit();
+            }
+        },1000);
+    })();
+</script>
+{% endif %}
+<script>
+// Typeset the whole page once MathJax is ready (for questions & options with LaTeX)
+window.addEventListener('DOMContentLoaded', () => {
+    if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise();
+    } else {
+        // MathJax loads async; wait for it
+        document.getElementById('MathJax-script').addEventListener('load', () => {
+            MathJax.typesetPromise();
+        });
+    }
+});
+
+function typewriterEffect(container, text, callback) {
+    // container already has any HTML prefix; we append plain text + cursor after it
+    const words = text.split(/(\s+)/);
+    let i = 0;
+    const cursor = document.createElement('span');
+    cursor.className = 'ai-cursor';
+    container.appendChild(cursor);
+
+    function nextWord() {
+        if (i < words.length) {
+            cursor.insertAdjacentText('beforebegin', words[i]);
+            i++;
+            const delay = words[i - 1].trim() === '' ? 10 : 30 + Math.random() * 30;
+            setTimeout(nextWord, delay);
+        } else {
+            cursor.remove();
+            if (callback) callback();
+        }
+    }
+    nextWord();
+}
+
+function fetchAIExplanation(btn) {
+    const qId = btn.getAttribute('data-id');
+    const question = btn.getAttribute('data-question');
+    const options = {
+        'a': btn.getAttribute('data-opa'),
+        'b': btn.getAttribute('data-opb'),
+        'c': btn.getAttribute('data-opc'),
+        'd': btn.getAttribute('data-opd')
+    };
+    const correct = btn.getAttribute('data-correct');
+
+    const responseBox = document.getElementById('ai-response-' + qId);
+    responseBox.style.display = 'block';
+    responseBox.innerHTML = '<span class="loading-pulse">Thinking...</span>';
+    btn.disabled = true;
+
+    fetch('/api/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            question: question,
+            options: options,
+            correct: options[correct]
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            responseBox.innerHTML = '<span style="color: var(--wrong);">Error: ' + data.error + '</span>';
+            btn.disabled = false;
+        } else {
+            // Set the prefix as rendered HTML first
+            responseBox.innerHTML = '<strong style="color: var(--primary); display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem;">smart_toy</span> AI says:</strong> ';
+            // Then stream only the plain explanation text word-by-word
+            typewriterEffect(responseBox, data.explanation, () => {
+                // Convert markdown‑style **bold** and *italic* to proper HTML after the text is fully typed
+                responseBox.innerHTML = responseBox.innerHTML
+                    .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                    .replace(/\*(.*?)\*/g, '<i>$1</i>');
+                if (window.MathJax && MathJax.typesetPromise) {
+                    MathJax.typesetPromise([responseBox]);
+                }
+                btn.disabled = false;
+            });
+        }
+    })
+    .catch(err => {
+        responseBox.innerHTML = '<span style="color: var(--wrong);">Failed to fetch explanation.</span>';
+        btn.disabled = false;
+    });
+}
+</script>
+{% endblock %}
