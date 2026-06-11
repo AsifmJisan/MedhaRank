@@ -1057,12 +1057,13 @@ def study_chapter(subject_id, chapter_id):
     subject_sanitized = sanitize_filename_app(subject['name'])
     chapter_sanitized = sanitize_filename_app(chapter['title'])
     
-    notes_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notes", subject_sanitized, chapter_sanitized)
+    notes_dir = os.path.join(app.root_path, "notes", subject_sanitized, chapter_sanitized)
     pdf_filename = None
     if os.path.isdir(notes_dir):
-        pdf_files = glob.glob(os.path.join(notes_dir, "*.pdf"))
-        if pdf_files:
-            pdf_filename = os.path.basename(pdf_files[0])
+        for f in os.listdir(notes_dir):
+            if f.lower().endswith('.pdf'):
+                pdf_filename = f
+                break
             
     return render_template('study_chapter.html', subject=subject, chapter=chapter, pdf_filename=pdf_filename)
 
@@ -1077,7 +1078,7 @@ def serve_note(subject_id, chapter_id, filename):
         
     subject_sanitized = sanitize_filename_app(subject['name'])
     chapter_sanitized = sanitize_filename_app(chapter['title'])
-    notes_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "notes", subject_sanitized, chapter_sanitized)
+    notes_dir = os.path.join(app.root_path, "notes", subject_sanitized, chapter_sanitized)
     
     return send_from_directory(notes_dir, filename)
 
