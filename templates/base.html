@@ -39,7 +39,6 @@
                 <a href="{{ url_for('study_home') }}" class="nav-link">Study Notes</a>
                 <a href="{{ url_for('live_dashboard') }}" class="nav-link" style="color: var(--accent); font-weight: bold; display: inline-flex; align-items: center; gap: 4px;"><span class="material-symbols-outlined" style="font-size: 1.1rem; color: #e74c3c; vertical-align: middle;">fiber_manual_record</span>Live Exams</a>
                 <a href="{{ url_for('leaderboard') }}" class="nav-link">Leaderboard</a>
-                <a href="{{ url_for('hall_of_fame') }}" class="nav-link">Hall of Fame</a>
                 {% if session.get('user_id') %}
                 <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
                 <a href="{{ url_for('profile') }}" class="nav-link nav-profile">
@@ -76,6 +75,9 @@
                 <h4>Platform</h4>
                 <a href="{{ url_for('subjects_page') }}">All Subjects</a>
                 <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            </div>
+            <div class="footer-col">
+                <h4>Credits</h4>
                 <a href="{{ url_for('hall_of_fame') }}">Hall of Fame</a>
             </div>
             <div class="footer-col">

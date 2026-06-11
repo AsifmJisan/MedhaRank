@@ -761,67 +761,173 @@ def api_stats():
     })
 
 
-def get_gemini_api_keys():
-    env_keys = os.environ.get("GEMINI_API_KEYS")
-    if env_keys:
-        # Strip potential wrapping quotes around the entire env string
-        env_keys = env_keys.strip('"\'')
-        # Split by comma and strip quotes and whitespace from individual keys
-        keys = [k.strip().strip('"\'') for k in env_keys.split(",") if k.strip()]
-        if keys:
-            return keys
-    
-    env_key = os.environ.get("GEMINI_API_KEY")
-    if env_key:
-        return [env_key.strip().strip('"\'')]
+def extract_chat_messages(payload):
+    messages = []
+    if 'systemInstruction' in payload:
+        sys_text = payload['systemInstruction']['parts'][0]['text']
+        messages.append({"role": "system", "content": sys_text})
         
-    # Hardcoded keys as fallback
-    return [
-        "AIzaSyBizGMGLRFcY61BO12MUjfKBPceEifplKA",
-        "AIzaSyAemCeEY0Lqrt81anoDBxS4jzgyvkLlsg4"
-    ]
+    contents = payload.get('contents', [])
+    for msg in contents:
+        role = msg.get('role', 'user')
+        if role == 'model':
+            role = 'assistant'
+            
+        text = ""
+        for part in msg.get('parts', []):
+            text += part.get('text', '')
+            
+        messages.append({"role": role, "content": text})
+    return messages
 
-def call_gemini_api(payload, model_candidates=None):
-    if model_candidates is None:
-        model_candidates = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-flash-latest"]
-        
-    api_keys = get_gemini_api_keys()
+def call_gemini_api(payload, model_candidates=None, preferred_api='groq', max_tokens=800):
     last_error = None
+    messages = extract_chat_messages(payload)
     
-    for api_key in api_keys:
-        for model in model_candidates:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    def try_groq():
+        groq_key = os.environ.get("GROQ_API_KEY")
+
+        if not groq_key:
+            raise RuntimeError("GROQ_API_KEY is missing")
+
+        # Debug only: shows key loaded without exposing full key
+        print("GROQ key loaded:", groq_key[:8] + "...")
+
+        url = "https://api.groq.com/openai/v1/chat/completions"
+
+        short_messages = []
+
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+
+            if role == "system":
+                content = "Give a clear exam-style answer. Keep it concise but complete. Explain only necessary points."
+            else:
+                content = content[:1200]
+
+            short_messages.append({
+                "role": role,
+                "content": content
+        })
+
+        data_dict = {
+            "model": "llama-3.1-8b-instant",
+            "messages": short_messages,
+            "max_tokens": 400,
+            "temperature": 0.2
+        }
+
+        data = json.dumps(data_dict).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {groq_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 MedhaRank/1.0"
+            }
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=12) as response:
+                res_data = json.loads(response.read().decode("utf-8"))
+                return res_data["choices"][0]["message"]["content"]
+
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode("utf-8")
+            raise RuntimeError(f"Groq HTTP {e.code}: {error_body}")
+
+        except Exception as e:
+            raise RuntimeError(f"Groq failed: {str(e)}")
+
+    def try_gemini():
+        gemini_key = os.environ.get("GEMINI_API_KEY")
+        if not gemini_key:
+            keys = os.environ.get("GEMINI_API_KEYS")
+            if keys: gemini_key = keys.strip('"\'').split(",")[0]
+        if not gemini_key: return None
+        
+        gemini_payload = payload.copy()
+        if 'generationConfig' not in gemini_payload:
+            gemini_payload['generationConfig'] = {"temperature": 0.3, "maxOutputTokens": max_tokens}
+            
+        candidates = model_candidates if model_candidates else ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-3.5-flash"]
+        for model in candidates:
             try:
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(payload).encode('utf-8'),
-                    headers={'Content-Type': 'application/json'}
-                )
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
+                req = urllib.request.Request(url, data=json.dumps(gemini_payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
                 with urllib.request.urlopen(req, timeout=12) as response:
                     res_data = json.loads(response.read().decode('utf-8'))
-                    text = res_data['candidates'][0]['content']['parts'][0]['text']
-                    return text
+                    return res_data['candidates'][0]['content']['parts'][0]['text']
             except Exception as e:
-                err_str = ""
+                err_msg = str(e)
                 if hasattr(e, 'read'):
-                    try:
-                        err_str = e.read().decode('utf-8')
-                        err_body = json.loads(err_str)
-                        last_error = err_body.get('error', {}).get('message', str(e))
-                    except:
-                        last_error = err_str if err_str else str(e)
-                else:
-                    last_error = str(e)
-                
-                # Print debug error info to server log
-                print(f"Gemini API Error with model {model} using key {api_key[:6]}...: {last_error}", flush=True)
-                
-                # If we hit key issues (invalid/not found/forbidden) or quota/rate limits, skip this key immediately
-                err_lower = last_error.lower()
-                if any(x in err_lower for x in ['429', 'quota', 'limit', 'key', 'invalid', 'not found', '403']):
+                    try: err_msg = e.read().decode('utf-8')
+                    except: pass
+                print(f"Gemini API failed with model {model}: {err_msg}", flush=True)
+                if any(x in err_msg.lower() for x in ['429', 'quota', 'limit', 'key', 'invalid', 'not found', '403']):
                     break
-                    
-    raise Exception(f"All Gemini API keys and model combinations failed. Last error: {last_error}")
+        return None
+
+    def try_openrouter():
+        openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+        if not openrouter_key: return None
+        
+        free_models = [
+            "openrouter/free",
+            "google/gemma-4-31b-it:free",
+            "nvidia/nemotron-3-super-120b-a12b:free"
+        ]
+        
+        last_err = None
+        for model in free_models:
+            try:
+                url = "https://openrouter.ai/api/v1/chat/completions"
+                data_dict = {
+                    "model": model, 
+                    "messages": messages, 
+                    "max_tokens": max_tokens, 
+                    "temperature": 0.3
+                }
+                data = json.dumps(data_dict).encode('utf-8')
+                headers = {
+                    "Authorization": f"Bearer {openrouter_key}", 
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://medharank.lovable.app",
+                    "X-Title": "MedhaRank AI Tutor"
+                }
+                req = urllib.request.Request(url, data=data, headers=headers)
+                with urllib.request.urlopen(req, timeout=12) as response:
+                    res_data = json.loads(response.read().decode('utf-8'))
+                    return res_data['choices'][0]['message']['content']
+            except Exception as e:
+                last_err = e
+        
+        if last_err:
+            raise last_err
+        return None
+
+    providers = []
+    if preferred_api == 'gemini':
+        providers = [('Gemini', try_gemini), ('Groq', try_groq), ('OpenRouter', try_openrouter)]
+    else:
+        providers = [('Groq', try_groq), ('Gemini', try_gemini), ('OpenRouter', try_openrouter)]
+        
+    for name, func in providers:
+        try:
+            res = func()
+            if res is not None: return res
+        except Exception as e:
+            err_msg = str(e)
+            if hasattr(e, 'read'):
+                try: err_msg = e.read().decode('utf-8')
+                except: pass
+            print(f"{name} API failed: {err_msg}", flush=True)
+            last_error = f"{name}: {err_msg}"
+            
+    raise Exception(f"All APIs failed or timed out. Last error: {last_error}")
 
 
 # ── API: AI Explanation ──────────────────────────────────────────────
@@ -833,20 +939,14 @@ def api_explain():
 
     data = request.json
     question = data.get('question')
-    options = data.get('options')
     correct_ans = data.get('correct')
 
-    if not question or not options or not correct_ans:
+    if not question or not correct_ans:
         return jsonify({"error": "Missing data"}), 400
 
     prompt = (
-        "তুমি একজন শিক্ষক। নিচের multiple choice প্রশ্নটির সঠিক উত্তর কেন সেটা 2-3টি সহজ বাক্যে বুঝিয়ে দাও। "
-        "উত্তর দেওয়ার সময় সাধারণ কথাবার্তা বাংলায় লেখো, কিন্তু technical term, বৈজ্ঞানিক শব্দ, বা subject-specific শব্দ ইংরেজিতে রাখো। "
-        "যেমন: 'এই বিক্রিয়াটি SN1 mechanism অনুসরণ করে কারণ carbocation intermediate তৈরি হয়।' "
-        f"প্রশ্ন: {question}. "
-        f"Options: {json.dumps(options)}. "
-        f"সঠিক উত্তর হলো: '{correct_ans}'. "
-        "এখন ব্যাখ্যা করো।"
+        "Explain this MCQ answer in Bengali in 2 sentences. Keep technical terms in English.\n"
+        f"Q:{question}\nAns:{correct_ans}"
     )
 
     payload = {
@@ -871,49 +971,48 @@ def api_chat():
     if not history:
         return jsonify({"error": "Missing history"}), 400
 
-    user_id = session.get('user_id')
-    performance_context = ""
-    if user_id:
-        conn = get_db()
-        scores = conn.execute('''
-            SELECT sub.name as subject_name, SUM(s.score) as total_correct, SUM(s.total) as total_questions
-            FROM scores s
-            JOIN subjects sub ON s.subject_id = sub.id
-            WHERE s.user_id = ?
-            GROUP BY sub.name
-        ''', (user_id,)).fetchall()
-        conn.close()
+    non_system = [m for m in history if m.get('role') != 'system']
+    trimmed = non_system[-3:]
+    for m in trimmed:
+        for part in m.get('parts', []):
+            if len(part.get('text', '')) > 1500:
+                part['text'] = part['text'][-1500:]
 
-        if scores:
-            perf_lines = []
-            for row in scores:
-                if row['total_questions'] > 0:
-                    pct = int(row['total_correct'] / row['total_questions'] * 100)
-                    perf_lines.append(f"{row['subject_name']}: {pct}%")
-            if perf_lines:
-                performance_context = (
-                    "Here is the student's current performance data: " + ", ".join(perf_lines) + ". "
-                    "If they are struggling (<50%) in a subject, offer encouraging advice. "
-                    "If they are doing well, praise them. Use this context to personalize your responses naturally when it fits the conversation."
-                )
+    last_user = ""
+    for m in reversed(trimmed):
+        if m.get('role') == 'user':
+            for part in m.get('parts', []):
+                last_user += part.get('text', '')
+            break
 
-    system_instruction = (
-        "তুমি একজন বন্ধুত্বপূর্ণ, শান্ত শিক্ষক যে একজন ছাত্রকে ছোটখাটো উপদেশ এবং অনুপ্রেরণা দেয়। "
-        "তোমার উত্তরগুলো খুব সংক্ষিপ্ত এবং উৎসাহজনক হতে হবে। "
-        "বেশি কথা বলবে না। "
-        "সাধারণ কথাবার্তা বাংলায় লেখো, কিন্তু technical term, বৈজ্ঞানিক শব্দ, বা subject-specific শব্দ ইংরেজিতে রাখো। "
-        f"{performance_context}"
-    )
+    import re
+    t = last_user.strip()
+    mode, max_tokens = "normal", 400
+    if len(t) < 20 and re.match(r'^(hi|hello|hey|salam|assalam|হাই|হ্যালো|হ্যালু|কেমন আছো|কেমন আছেন|thanks?|thank you|ok|okay)\b', t, re.IGNORECASE):
+        mode, max_tokens = "greeting", 80
+    elif re.search(r'detail|explain in detail|বিস্তারিত|details?|elaborate|long', t, re.IGNORECASE):
+        mode, max_tokens = "detailed", 500
+    elif re.search(r'practice|mcq.*(make|create|generate|বানা)', t, re.IGNORECASE):
+        mode, max_tokens = "practice", 400
+    elif re.search(r'বাংলা|bangla|bengali', t, re.IGNORECASE) or re.search(r'[\u0980-\u09FF]', t):
+        mode, max_tokens = "bangla", 400
+    elif len(t) < 60:
+        mode, max_tokens = "simple", 300
+
+    if mode == "greeting":
+        return jsonify({"reply": "Hi! Ask me any admission question — MCQ, concept, shortcut, or Bangla explanation."})
+
+    system_instruction = "You are MedhaRank AI Tutor. Explain admission topics simply in Bangla or English. Keep answers short, exam-focused, and easy to learn. No greetings or filler. Don't repeat the question. Use bullet points when useful. Answer in the user's language. Expand only if the user asks for details."
 
     payload = {
         "systemInstruction": {
             "parts": [{"text": system_instruction}]
         },
-        "contents": history
+        "contents": trimmed
     }
 
     try:
-        reply = call_gemini_api(payload)
+        reply = call_gemini_api(payload, preferred_api='gemini', max_tokens=max_tokens)
         return jsonify({"reply": reply})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1323,18 +1422,11 @@ def ai_revision_next():
     if not wrong_entry:
         return jsonify({"status": "empty"})
         
-    prompt = "You are an AI teacher. The student got the following multiple-choice question wrong. Generate a slightly modified version (different numbers, different context, or different phrasing) but testing the same concept. Return a JSON object with exact keys: 'original_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option' (must be 'a', 'b', 'c', or 'd'), 'explanation'. Return ONLY valid JSON and nothing else.\n\n"
-    
-    q_data = {
-        "id": wrong_entry['question_id'],
-        "question_text": wrong_entry['question_text'],
-        "option_a": wrong_entry['option_a'],
-        "option_b": wrong_entry['option_b'],
-        "option_c": wrong_entry['option_c'],
-        "option_d": wrong_entry['option_d'],
-        "correct_option": wrong_entry['correct_option']
-    }
-    prompt += json.dumps(q_data)
+    prompt = (
+        "Make a similar MCQ testing same concept. Return pure JSON only: "
+        "{\"original_id\":...,\"question_text\":\"...\",\"option_a\":\"...\",\"option_b\":\"...\",\"option_c\":\"...\",\"option_d\":\"...\",\"correct_option\":\"a/b/c/d\",\"explanation\":\"...\"}\n"
+        f"Q:{wrong_entry['question_text']}\nAns:{wrong_entry['correct_option']}"
+    )
     
     payload = {
         "contents": [{"parts": [{"text": prompt}]}]
@@ -1422,24 +1514,9 @@ def generate_mock_question():
         
     orig_q = random.choice(questions)
     
-    if random.random() < 0.25:
-        return jsonify({
-            "question": orig_q.get('text', ''),
-            "options": orig_q.get('options', {}),
-            "correct": orig_q.get('correct', ''),
-            "explanation": orig_q.get('explanation', ''),
-            "is_ai": False
-        })
-        
     prompt = (
-        f"You are an AI generating mock exam questions for a student in {year} aiming for {goal}. "
-        f"Here is an original question: '{orig_q.get('text', '')}'. "
-        f"Options: {json.dumps(orig_q.get('options', {}))}. "
-        f"Correct Answer: {orig_q.get('correct', '')}. "
-        "Create a similar but new multiple-choice question in the same language. "
-        "Output strictly valid JSON with no markdown formatting. The JSON must have exactly these keys: "
-        "'question' (string), 'options' (object with keys 'a', 'b', 'c', 'd'), 'correct' (string 'a', 'b', 'c', or 'd'), "
-        "and 'explanation' (string)."
+        f"Target:{year},{goal}. Q:{orig_q.get('text', '')}. Ans:{orig_q.get('correct', '')}. "
+        "Make 1 similar new MCQ in same language with 4 options. Return pure JSON: {\"question\":\"...\",\"options\":{\"a\":\"...\",\"b\":\"...\",\"c\":\"...\",\"d\":\"...\"},\"correct\":\"a/b/c/d\",\"explanation\":\"...\"}"
     )
     
     payload = {
